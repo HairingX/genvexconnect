@@ -45,12 +45,26 @@ class NilanConnectEntityBase(Generic[VALUE_KEY_TYPE], Entity):
             self.set_unit_of_measurement(self._unit_of_measurement)
         
     async def async_added_to_hass(self) -> None:
+        # Registered for every entity, also the ones that do not track a value, so a
+        # button on a device that stopped answering is not presented as usable.
+        self.proxy.register_connection_state_handler(self._on_connection_state_change)
         if self._use_default_update_handler and self._value_key is not None:
             self.proxy.register_update_handler(self._value_key, self._on_change)
     
     async def async_will_remove_from_hass(self) -> None:
+        self.proxy.deregister_connection_state_handler(self._on_connection_state_change)
         if self._use_default_update_handler and self._value_key is not None:
             self.proxy.deregister_update_handler(self._value_key, self._on_change)
+
+    @property
+    def available(self) -> bool:
+        """Report unavailable once the device stops answering.
+
+        Without this the last known reading stays on screen looking current, which is
+        worse than showing nothing. A point the device does answer for but has no value
+        for still reports None, which Home Assistant shows as unknown.
+        """
+        return self.proxy.is_available()
 
     def set_unit_of_measurement(self, uom:str|None):
         # self._attr_unit_of_measurement = self.parseUnitOfMeasure(uom)
@@ -76,6 +90,18 @@ class NilanConnectEntityBase(Generic[VALUE_KEY_TYPE], Entity):
         if self.hass is None: return # type: ignore
         _LOGGER.debug(f"Value Update: {self._attr_translation_key}: {old_value} -> {new_value}")
         self.schedule_update_ha_state(force_refresh=True)
+
+    def _on_connection_state_change(self, available:bool):
+        """Push the availability change so HA rereads it.
+
+        HA only reads the available property when state is written, and a device that
+        went away sends nothing, so without this push the entity would keep its last
+        state forever. Called from the proxy receive thread, which is fine here:
+        schedule_update_ha_state hands the write back to the event loop.
+        """
+        if self.hass is None: return # type: ignore
+        _LOGGER.debug(f"Availability Update: {self._attr_translation_key}: {available}")
+        self.schedule_update_ha_state()
 
     @property
     def device_info(self): # type: ignore
