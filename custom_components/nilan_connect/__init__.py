@@ -32,8 +32,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     authorized_email = str(entry.data.get(CONF_AUTHORIZED_EMAIL))
     proxy = NilanProxy(authorized_email)
     device_id = str(entry.data.get(CONF_DEVICE_ID))
-    device_ip = str(entry.data.get(CONF_DEVICE_IP))
-    device_port = int(entry.data.get(CONF_DEVICE_PORT, 0))
+    # Only stored when the device was set up manually. Pass them through untouched so
+    # the proxy falls back to discovery when they are absent, which is what keeps a
+    # changed dhcp lease from breaking the setup. Do not cast, str(None) would become
+    # the literal "None" and end up being resolved as a hostname.
+    device_ip = entry.data.get(CONF_DEVICE_IP)
+    device_port = entry.data.get(CONF_DEVICE_PORT)
     proxy.set_device(device_id, device_ip, device_port)
 
     discoveryResult = await proxy.wait_for_discovery()

@@ -36,6 +36,11 @@ To setup the integration, go into "Configuration" -> "Integrations" and press on
 The integration should search for your device and let you choose which one to use. You then need to provide it with the same email as used in the Nilan or Genvex Connect app. This is case sensitive.
 Then if all goes well, your device should be added and working in Home Assistant.
 
+### Device addresses and DHCP
+When you pick a discovered device, only the device id is stored, never its IP address. The address is looked up again through discovery every time Home Assistant starts, and also while reconnecting after a dropped connection. Your device is therefore free to get a new address from DHCP, and you do **not** need to give it a static IP.
+
+The "Manual" option is a fallback for networks where the discovery broadcast does not reach the device, for example when it sits on another subnet or VLAN. It stores the address you type, so in that case you should give the device a static IP or a DHCP reservation, otherwise the integration stops working when the address changes. Only literal IPv4 addresses are accepted here, hostnames are not.
+
 ## Warning
 Some users have posted, that Nilan have locked them out of their gateway after accessing it with other devices than their app.
 I cannot confirm the validity of the posts, but to avoid getting into that situation i recommend that you
