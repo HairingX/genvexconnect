@@ -12,5 +12,5 @@
     "requirements": [
         "nilan_proxy~=1.0.3"
     ],
-    "version": "1.0.6"
+    "version": "1.0.5"
 }
