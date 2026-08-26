@@ -1,7 +1,14 @@
 name: Release
 
+# Run this from the Actions tab. Do not publish the draft release by hand, that is
+# what put the tag on a commit still holding the previous version number.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (X.Y.Z, no v prefix). Leave empty to use the version from the newest draft release.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -12,21 +19,27 @@ concurrency:
 
 jobs:
   release:
-    name: Resolve version from draft and publish
+    name: Resolve version and publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Resolve version from latest draft release
+      - name: Resolve version
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
+          if [[ -n "$INPUT_VERSION" ]]; then
+            echo "Using the supplied version: $INPUT_VERSION"
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           tag_name=$(gh api "repos/$REPO/releases" \
             --jq '[.[] | select(.draft==true)] | sort_by(.created_at) | reverse | .[0].tag_name // empty')
           if [[ -z "$tag_name" ]]; then
-            echo "::error::No draft release found. Wait for the Release Drafter workflow to create a draft, then retry."
+            echo "::error::No draft release found. Wait for the Release Drafter workflow to create a draft, or supply a version."
             exit 1
           fi
           if [[ ! "$tag_name" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$ ]]; then

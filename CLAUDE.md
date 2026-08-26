@@ -36,9 +36,10 @@ pitfalls below.
 3. **Run the `Release` workflow from the Actions tab.** That is the release step.
    Do not press Publish on the draft.
 
-`Release` reads the version from the newest draft and hands it to the composite
-action in `.github/actions/release-publish`, which does the whole thing in one
-direction:
+`Release` takes an optional version. Leave it empty and it reads the version from the
+newest draft; fill it in to jump a minor or major without relabelling merged pull
+requests. Either way it hands the version to the composite action in
+`.github/actions/release-publish`, which does the whole thing in one direction:
 
 ```
 validate version -> check the tag is free -> bump manifest.json -> commit -> push
@@ -48,9 +49,6 @@ validate version -> check the tag is free -> bump manifest.json -> commit -> pus
 
 The zip attached to the release is what HACS installs, because `hacs.json` sets
 `zip_release` and `filename`.
-
-`Release manual` does the same with a version you type, for jumping a minor or major
-without relabelling merged pull requests.
 
 `.github/workflows/release-dev.yml` zips and uploads only, with no version bump. It
 is `workflow_dispatch` and is for trying a build without cutting a release.
@@ -73,7 +71,7 @@ anything labelled `skip-changelog`. An autolabeler adds `bug` for branches named
 `fix/...` and `feature request` for `feature/...`.
 
 So: **to release anything other than a patch, label the pull request before merging
-it**, or use `Release manual`.
+it**, or type the version into `Release`.
 
 ### Pitfall: never publish the draft by hand
 
