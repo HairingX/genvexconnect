@@ -1,46 +1,38 @@
 name: Release Drafter
 
 on:
-  # workflow_dispatch:
   push:
-    # branches to consider in the event; optional, defaults to all
     branches:
       - main
-  # pull_request event is required only for autolabeler
   pull_request:
-    # Only following types are handled by the action, but one can default to all as well
     types: [opened, reopened, synchronize]
-  # pull_request_target event is required for autolabeler to support PRs from forks
-  # pull_request_target:
-  #   types: [opened, reopened, synchronize]
 
-# permissions:
-#   contents: read
+permissions:
+  contents: read
 
 jobs:
   update_release_draft:
     name: Update release draft
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
-      # write permission is required to create a github release
       contents: write
-      # write permission is required for autolabeler
-      # otherwise, read permission is required at least
+      pull-requests: read
+    steps:
+      - name: Draft release
+        uses: release-drafter/release-drafter@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  autolabel_pr:
+    name: Auto-label pull request
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
       pull-requests: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-        # Drafts your next Release notes as Pull Requests are merged into "master"
-      - name: Create Release
-        uses: release-drafter/release-drafter@v6
-        with:
-          disable-releaser: github.ref != 'refs/heads/master'
-        # (Optional) specify config name to use, relative to .github/. Default: release-drafter.yml
-        # with:
-        #   config-name: my-config.yml
-        #   disable-autolabeler: true
+      - name: Apply labels
+        uses: release-drafter/release-drafter/autolabeler@v7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

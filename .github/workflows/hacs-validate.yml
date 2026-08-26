@@ -1,11 +1,16 @@
 name: Code validation
 
+# No schedule on purpose. GitHub disables workflows that carry one after 60 days
+# of repository inactivity, and that is how this one silently stopped running.
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
   pull_request:
-  schedule:
-    - cron:  '0 0 * * *'
+
+permissions:
+  contents: read
 
 jobs:
   validate-hassfest:
@@ -13,17 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: validation
         uses: home-assistant/actions/hassfest@master
 
   validate-hacs:
     name: HACS validation
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
       - name: checkout
-        uses: "actions/checkout@v4"
+        uses: actions/checkout@v6
       - name: validation
-        uses: "hacs/action@main"
+        uses: hacs/action@main
         with:
-          category: "integration"
+          category: integration

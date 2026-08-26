@@ -1,0 +1,34 @@
+name: Release manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (X.Y.Z, no v prefix). Overrides the version the draft resolved to.'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publish with supplied version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository (so the local composite action is on disk)
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Publish release
+        uses: ./.github/actions/release-publish
+        with:
+          version: ${{ inputs.version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}

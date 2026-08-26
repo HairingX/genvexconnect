@@ -23,26 +23,37 @@ a three line change into a whole file diff.
 
 ## Releasing
 
-**The version is never edited by hand.** Two GitHub workflows own it. Editing
-`manifest.json`'s `version` yourself breaks the release, see the pitfall below.
+**The version is never edited by hand, and the draft release is never published by
+hand.** Both are done for you, and doing either yourself breaks the release. See the
+pitfalls below.
 
-1. **Merge a pull request into `main`.**
-   `.github/workflows/release-drafter.yml` creates or updates a **draft release**,
-   computing the next version and writing the changelog from merged pull request
-   titles.
+1. **Merge a pull request into `main`.** `.github/workflows/release-drafter.yml`
+   creates or updates a **draft release**, computing the next version and writing the
+   changelog from merged pull request titles.
 2. **Check the draft** at
    [releases](https://github.com/HairingX/nilan_connect/releases). It is named
    `vX.Y.Z`.
-3. **Publish the draft.** The only manual step.
-4. Publishing fires `.github/workflows/release.yml`, which:
-   - runs `.github/scripts/update_hacs_manifest.py --version <tag>` to write
-     `version` into `manifest.json`, stripping the leading `v`
-   - commits it as `Updated manifest.json` and pushes to `main`
-   - zips `custom_components/nilan_connect` and attaches `nilan_connect.zip` to the
-     release, which is what HACS installs
+3. **Run the `Release` workflow from the Actions tab.** That is the release step.
+   Do not press Publish on the draft.
 
-`.github/workflows/release-dev.yml` does the zip and upload only, no version bump.
-It is `workflow_dispatch` and is for trying a build without cutting a release.
+`Release` reads the version from the newest draft and hands it to the composite
+action in `.github/actions/release-publish`, which does the whole thing in one
+direction:
+
+```
+validate version -> check the tag is free -> bump manifest.json -> commit -> push
+-> tag -> zip custom_components/nilan_connect
+-> capture the draft body, delete the draft -> gh release create
+```
+
+The zip attached to the release is what HACS installs, because `hacs.json` sets
+`zip_release` and `filename`.
+
+`Release manual` does the same with a version you type, for jumping a minor or major
+without relabelling merged pull requests.
+
+`.github/workflows/release-dev.yml` zips and uploads only, with no version bump. It
+is `workflow_dispatch` and is for trying a build without cutting a release.
 
 ### How the next version number is chosen
 
@@ -61,18 +72,32 @@ The same file groups the changelog by label (`breaking-change`, `enhancement` /
 anything labelled `skip-changelog`. An autolabeler adds `bug` for branches named
 `fix/...` and `feature request` for `feature/...`.
 
-So: **to release anything other than a patch, label the pull request before
-merging it.**
+So: **to release anything other than a patch, label the pull request before merging
+it**, or use `Release manual`.
 
-### Pitfall: never bump the version by hand
+### Pitfall: never publish the draft by hand
 
-`release.yml` writes the version into `manifest.json` and then commits it. If the
-file already holds the released version there is nothing to stage, `git commit`
-exits 1 and the job fails, so no zip is attached to the release. Leave `version`
-at whatever the last release wrote; the tag is the source of truth.
+Publishing the draft creates the tag immediately, at whatever `main` points to. The
+version bump would then land *after* the tag, so the tag would carry the previous
+version. That is exactly what the old event driven workflow did, and every tag it
+produced is wrong:
 
-This applies only to the `version` field. Changing `requirements` is a normal code
-change and belongs in the pull request.
+```
+tag v1.0.2 -> manifest.json says 1.0.1
+tag v1.0.3 -> manifest.json says 1.0.1
+tag v1.0.4 -> manifest.json says 1.0.3
+tag v1.0.5 -> manifest.json says 1.0.4
+```
+
+`Release` bumps, commits and only then tags, so the tag and the manifest agree.
+Publishing by hand also builds and attaches nothing at all now, because nothing
+listens for `release: published` any more, which would leave HACS with a release
+carrying no zip.
+
+### Only `version` is release managed
+
+`requirements`, and everything else in `manifest.json`, is a normal code change and
+belongs in the pull request. Only `version` is written by the release.
 
 ### Releasing alongside nilan_proxy
 
@@ -108,7 +133,12 @@ Order: release `nilan_proxy` to PyPI, confirm the version is there, then release
 
 ## Validation
 
-`.github/workflows/hacs-validate.yml` runs Hassfest and HACS validation on every
-push and pull request, and nightly. There are no unit tests in this repository;
-the logic that can be tested without Home Assistant lives in `nilan_proxy`, which
-has a suite.
+`.github/workflows/hacs-validate.yml` runs Hassfest and HACS validation on pushes to
+`main`, on pull requests, and on demand from the Actions tab. There are no unit tests
+in this repository; the logic that can be tested without Home Assistant lives in
+`nilan_proxy`, which has a suite.
+
+**It deliberately carries no `schedule`.** GitHub disables workflows that have one
+after 60 days of repository inactivity, and that is how this workflow silently
+stopped running, taking Hassfest and HACS validation with it. If a nightly run is
+ever wanted, expect to re-enable the workflow by hand from time to time.
