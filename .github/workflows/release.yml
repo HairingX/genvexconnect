@@ -1,39 +1,62 @@
 name: Release
 
+# Run this from the Actions tab. Do not publish the draft release by hand, that is
+# what put the tag on a commit still holding the previous version number.
 on:
   workflow_dispatch:
-  release:
-    types: [published]
+    inputs:
+      version:
+        description: 'Version to release (X.Y.Z, no v prefix). Leave empty to use the version from the newest draft release.'
+        required: false
+        type: string
 
-env:
-  COMPONENT_DIR: nilan_connect
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release_zip_file:
-    name: Prepare release asset
+  release:
+    name: Resolve version and publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Update manifest.json version to ${{ github.event.release.tag_name }}
+      - name: Resolve version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          python3 ${{ github.workspace }}/.github/scripts/update_hacs_manifest.py --version ${{ github.event.release.tag_name }} --path /custom_components/nilan_connect/
-      - name: Commit manifest update
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add ./custom_components/nilan_connect/manifest.json
-          git commit -m "Updated manifest.json"
-          git push origin HEAD:main
-      - name: Create zip
-        run: |
-          cd custom_components/nilan_connect
-          zip nilan_connect.zip -r ./
-      - name: Upload zip to release
-        uses: svenstaro/upload-release-action@v2
+          if [[ -n "$INPUT_VERSION" ]]; then
+            echo "Using the supplied version: $INPUT_VERSION"
+            echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tag_name=$(gh api "repos/$REPO/releases" \
+            --jq '[.[] | select(.draft==true)] | sort_by(.created_at) | reverse | .[0].tag_name // empty')
+          if [[ -z "$tag_name" ]]; then
+            echo "::error::No draft release found. Wait for the Release Drafter workflow to create a draft, or supply a version."
+            exit 1
+          fi
+          if [[ ! "$tag_name" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$ ]]; then
+            echo "::error::Draft tag_name has unexpected format: $tag_name (expected vX.Y.Z or vX.Y.Z-suffix)"
+            exit 1
+          fi
+          version="${tag_name#v}"
+          echo "Resolved version from draft: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository (so the local composite action is on disk)
+        uses: actions/checkout@v6
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./custom_components/nilan_connect/nilan_connect.zip
-          asset_name: nilan_connect.zip
-          tag: ${{ github.ref }}
-          overwrite: true
+          ref: main
+
+      - name: Publish release
+        uses: ./.github/actions/release-publish
+        with:
+          version: ${{ steps.resolve.outputs.version }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
